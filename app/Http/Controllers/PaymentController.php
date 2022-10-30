@@ -1,0 +1,47 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Stripe;
+use DB;
+use Auth;
+use App\Models\myOrder;
+use App\Models\myCart;
+use Session;
+use Notification;
+
+class PaymentController extends Controller
+{
+    public function paymentPost(Request $request)
+    {
+	       
+	    Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+        Stripe\Charge::create ([
+                "amount" => $request->sub*100, // RM10 10*100 = 1000 cent
+                "currency" => "MYR",
+                "source" => $request->stripeToken,
+                "description" => "This payment is testing purpose of southern online",
+        ]);
+        
+        $newOrder=myOrder::Create([
+            'paymentStatus' => 'Done',
+            'userID' =>Auth::id(),
+            'amount' =>$request->sub,
+        ]);
+
+        $orderID=DB::table('my_orders')->where('userID','=',Auth::id())->orderBy('created_at','desc')->first(); // get the order ID just now created
+        
+        $items=$request->input('cid');
+        foreach($items as $item=>$value){
+            $carts=myCart::find($value); // get the cart item record
+            $carts->orderID=$orderID->id; // binding the orderID value with record
+            $carts->save();
+        }
+        
+        $email='hooernping02@gmail.com';
+        Notification::route('mail',$email)->notify(new \App\Notifications\orderPaid($email));
+
+        return back();
+    }
+}
